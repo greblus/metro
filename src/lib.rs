@@ -4,7 +4,10 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::Arc;
 
 mod editor;
+mod i18n;
 mod sounds;
+
+use i18n::tr;
 
 pub use sounds::Sound;
 
@@ -56,7 +59,9 @@ pub struct MetroParams {
     #[id = "meter"]
     pub meter: EnumParam<Meter>,
     #[id = "sound"]
-    pub sound: EnumParam<Sound>,
+    /// Indeks dźwięku (`Sound`). IntParam zamiast EnumParam, żeby nazwy wartości
+    /// widoczne w hoście były tłumaczone.
+    pub sound: IntParam,
     #[id = "accent"]
     pub accent: BoolParam,
     /// Na którą miarę (1..=7) pada akcent; przy krótszym metrum przycinane do ostatniej.
@@ -85,15 +90,31 @@ impl Default for MetroParams {
             editor_state: EguiState::from_size(editor::WIDTH, editor::HEIGHT),
             bpm: IntParam::new("Tempo", 100, IntRange::Linear { min: BPM_MIN, max: BPM_MAX })
                 .with_unit(" BPM"),
-            meter: EnumParam::new("Metrum", Meter::M4_4),
-            sound: EnumParam::new("Dźwięk", Sound::Wood),
-            accent: BoolParam::new("Akcent", true),
-            accent_beat: IntParam::new("Akcent na mierze", 1, IntRange::Linear { min: 1, max: 7 }),
+            meter: EnumParam::new(tr("Meter", "Metrum"), Meter::M4_4),
+            sound: IntParam::new(
+                tr("Sound", "Dźwięk"),
+                Sound::Wood as i32,
+                IntRange::Linear { min: 0, max: sounds::SOUND_COUNT as i32 - 1 },
+            )
+            .with_value_to_string(Arc::new(|v| Sound::from_index(v as usize).name().to_string()))
+            .with_string_to_value(Arc::new(|s| {
+                let s = s.trim();
+                (0..sounds::SOUND_COUNT)
+                    .find(|&i| Sound::from_index(i).name().eq_ignore_ascii_case(s))
+                    .map(|i| i as i32)
+                    .or_else(|| s.parse().ok())
+            })),
+            accent: BoolParam::new(tr("Accent", "Akcent"), true),
+            accent_beat: IntParam::new(
+                tr("Accent beat", "Akcent na mierze"),
+                1,
+                IntRange::Linear { min: 1, max: 7 },
+            ),
             playing: BoolParam::new("Start", false),
-            sync: BoolParam::new("Synchronizacja z hostem", false),
-            pass_input: BoolParam::new("Przepuść wejście", true),
+            sync: BoolParam::new(tr("Sync to host", "Synchronizacja z hostem"), false),
+            pass_input: BoolParam::new(tr("Mix with track audio", "Miksuj z dźwiękiem ścieżki"), true),
             gain: FloatParam::new(
-                "Głośność",
+                tr("Volume", "Głośność"),
                 util::db_to_gain(-6.0),
                 FloatRange::Skewed {
                     min: util::db_to_gain(-40.0),
@@ -158,7 +179,7 @@ impl Default for Metro {
 
 impl Metro {
     fn trigger(&mut self, accent: bool) {
-        let sound = self.params.sound.value() as usize;
+        let sound = (self.params.sound.value() as usize).min(sounds::SOUND_COUNT - 1);
         let acc = (accent && self.params.accent.value()) as usize;
         self.voice = Some((sound, acc));
         self.voice_pos = 0;
@@ -322,7 +343,7 @@ impl Plugin for Metro {
 
 impl ClapPlugin for Metro {
     const CLAP_ID: &'static str = "pl.greblus.metro";
-    const CLAP_DESCRIPTION: Option<&'static str> = Some("Metronom z akcentem i wyborem dźwięku");
+    const CLAP_DESCRIPTION: Option<&'static str> = Some("Metronome with selectable sound, meter and accent");
     const CLAP_MANUAL_URL: Option<&'static str> = None;
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] =

@@ -1,20 +1,29 @@
 //! Syntezowane próbki kliknięć. Generowane raz w `initialize()` dla danej częstotliwości próbkowania.
 
+use crate::i18n::tr;
 use nih_plug::prelude::Enum;
 use std::f32::consts::TAU;
 
 #[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sound {
-    #[name = "Klik"]
     Click,
-    #[name = "Drewno"]
     Wood,
-    #[name = "Beep"]
     Beep,
-    #[name = "Dzwonek"]
     Cowbell,
-    #[name = "Hi-hat"]
     HiHat,
+}
+
+impl Sound {
+    /// Nazwa w bieżącym języku (GUI i host).
+    pub fn name(self) -> &'static str {
+        match self {
+            Sound::Click => tr("Click", "Klik"),
+            Sound::Wood => tr("Wood", "Drewno"),
+            Sound::Beep => "Beep",
+            Sound::Cowbell => tr("Cowbell", "Dzwonek"),
+            Sound::HiHat => "Hi-hat",
+        }
+    }
 }
 
 pub const SOUND_COUNT: usize = 5;

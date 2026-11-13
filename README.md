@@ -1,67 +1,72 @@
 # Metro
 
-Prosty metronom jako wtyczka **VST3 / CLAP** dla Linuksa (Ardour, Reaper i inne), napisany w Rust
-z użyciem [nih-plug](https://github.com/robbert-vdh/nih-plug) i egui. Działa też jako samodzielny program.
+[Wersja polska](README.pl.md)
+
+A simple metronome **VST3 / CLAP** plugin for Linux (Ardour, Reaper and others), written in Rust
+with [nih-plug](https://github.com/robbert-vdh/nih-plug) and egui. It also runs as a standalone app.
 
 <p>
-  <img src="docs/metro.png" width="420" alt="Metro – widok główny">
-  <img src="docs/metro-opcje.png" width="420" alt="Metro – opcje">
+  <img src="docs/metro-en.png" width="49%" alt="Metro – main view">
+  <img src="docs/metro-options-en.png" width="49%" alt="Metro – options">
 </p>
 
-## Funkcje
+## Features
 
-- metrum: 2/4, 3/4, 4/4, 5/4, 6/8, 7/8
-- tempo 20–260 BPM: suwak, przyciski +/−, kółko myszy, **Stuknij** (tap tempo)
-- 5 syntezowanych dźwięków: Klik, Drewno, Beep, Dzwonek, Hi-hat
-- **akcent na dowolnej mierze** (klik w kropkę miary albo przyciski w opcjach) lub wyłączony
-- **synchronizacja z transportem hosta**: klik startuje z odtwarzaniem/nagrywaniem, trzyma tempo
-  projektu i siatkę taktów (dla metrum x/8 klik pada co ósemkę)
-- przepuszczanie sygnału wejściowego (klik dodawany do sygnału ścieżki) lub sam klik
-- wszystkie ustawienia są parametrami wtyczki: zapisują się w projekcie i można je automatyzować
+- meters: 2/4, 3/4, 4/4, 5/4, 6/8, 7/8
+- tempo 20–260 BPM: slider, +/− buttons, mouse wheel, **Tap** tempo
+- 5 synthesized sounds: Click, Wood, Beep, Cowbell, Hi-hat
+- **accent on any beat** (click a beat dot or use the buttons in the options), or no accent at all
+- **sync to host transport**: the click starts with playback/recording and follows the project
+  tempo and bar grid (in x/8 meters it clicks on every eighth note)
+- **mix with track audio**: when on, the click is added to the track's signal; when off, the
+  plugin outputs the click only and the track's own audio is muted
+- all settings are plugin parameters, so they are saved with the project and can be automated
+- English and Polish UI, picked from the system locale (`LC_ALL` → `LC_MESSAGES` → `LANG`);
+  override with `METRO_LANG=en` or `METRO_LANG=pl`
 
-## Budowanie i instalacja
+## Building and installing
 
-Wymagany Rust (stable).
+Requires Rust (stable).
 
 ```sh
 cargo xtask install
 ```
 
-Buduje wtyczki i kopiuje je do `~/.vst3/Metro.vst3` oraz `~/.clap/Metro.clap`.
-Po aktualizacji uruchom DAW ponownie, a w razie potrzeby przeskanuj wtyczki.
+Builds the plugins and copies them to `~/.vst3/Metro.vst3` and `~/.clap/Metro.clap`.
+After an update, restart your DAW and rescan plugins if needed.
 
-Same paczki (bez instalacji) trafiają do `target/bundled/`:
+To only build the bundles (into `target/bundled/`):
 
 ```sh
 cargo xtask bundle metro --release
 ```
 
-Samodzielna aplikacja (JACK/ALSA):
+Standalone app (JACK/ALSA):
 
 ```sh
 cargo run --release --features standalone
 ```
 
-## Nagrywanie kliku
+## Recording the click
 
-DAW nagrywa **wejście** ścieżki, czyli sygnał przed wtyczkami. Żeby nagrać klik:
+DAWs record a track's **input**, i.e. the signal before its plugins. To record the click:
 
-**Reaper:** Metro na ścieżce, prawy klik na przycisku nagrywania:
-**Record: output → Record: output (stereo)** oraz **Monitor input**
-(nie „tape auto style”, bo ten wycisza ścieżkę podczas nagrywania).
+**Reaper:** put Metro on a track, right-click the record-arm button and choose
+**Record: output → Record: output (stereo)** and **Monitor input**
+(not "tape auto style", which mutes the track while recording).
 
-**Ardour:** Metro na szynie audio, wyjście szyny podłączone do wejścia ścieżki nagrywającej.
-Na wejściu tej ścieżki **nie** zostawiaj jednocześnie połączenia z kartą dźwiękową (`capture_*`):
-w połączeniu z backendem JACK na PipeWire skutkowało to nagrywaniem ciszy. Alternatywa bez
-nagrywania: zaznacz zakres i użyj *Consolidate/Bounce range (with processing)*.
+**Ardour:** put Metro on an audio bus and connect the bus output to the input of the track you
+record on. Do **not** also leave a sound card connection (`capture_*`) on that track's input:
+with the JACK backend on PipeWire this resulted in recording silence. Alternative without
+recording: select a range and use *Consolidate/Bounce range (with processing)*.
 
-W obu przypadkach najwygodniej włączyć **Synchronizuj z transportem hosta**.
+In both cases **Sync to host transport** is the most convenient mode.
 
-## Uwagi
+## Notes
 
-- GUI działa przez X11 (na Waylandzie przez XWayland), bo tak osadzają okna wtyczek VST3/CLAP
-  Ardour i Reaper.
+- The GUI uses X11 (XWayland on Wayland), because that is how Ardour and Reaper embed
+  VST3/CLAP plugin windows on Linux.
 
-## Licencja
+## License
 
-[GPL-3.0-or-later](LICENSE). Wersja VST3 korzysta z bindingów VST3 objętych GPLv3.
+[GPL-3.0-or-later](LICENSE). The VST3 version uses VST3 bindings licensed under GPLv3.

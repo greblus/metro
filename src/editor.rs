@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use crate::{Meter, MetroParams, Shared, Sound, BPM_MAX, BPM_MIN};
 use nih_plug::prelude::*;
 use nih_plug_egui::egui::{
@@ -125,7 +126,7 @@ fn draw(
     let tap_c = Pos2::new(cx - 112.0, row_y);
     let tap = circle_button(ui, "tap", tap_c, 28.0);
     painter.circle_filled(tap_c, 28.0, hover_fill(&tap, BTN, BTN_HOVER));
-    painter.text(tap_c, Align2::CENTER_CENTER, "Stuknij", FontId::proportional(14.0), TEXT);
+    painter.text(tap_c, Align2::CENTER_CENTER, tr("Tap", "Stuknij"), FontId::proportional(14.0), TEXT);
     if tap.clicked() && !sync {
         let now = Instant::now();
         if st.taps.last().is_some_and(|t| now - *t > Duration::from_secs(2)) {
@@ -173,7 +174,7 @@ fn draw(
         painter.text(
             play_c + Vec2::new(0.0, 62.0),
             Align2::CENTER_CENTER,
-            "sterowane przez transport hosta",
+            tr("controlled by host transport", "sterowane przez transport hosta"),
             FontId::proportional(12.0),
             DIM,
         );
@@ -221,7 +222,7 @@ fn draw_tempo_card(
         painter.text(
             num_c + Vec2::new(0.0, -62.0),
             Align2::CENTER_CENTER,
-            "TEMPO HOSTA",
+            tr("HOST TEMPO", "TEMPO HOSTA"),
             FontId::proportional(11.0),
             DIM,
         );
@@ -397,7 +398,7 @@ fn draw_settings(ui: &mut Ui, painter: &Painter, card: Rect, setter: &ParamSette
     painter.text(
         Pos2::new(x_l, card.min.y + 22.0),
         Align2::LEFT_CENTER,
-        "Dźwięk",
+        tr("Sound", "Dźwięk"),
         FontId::proportional(13.0),
         DIM,
     );
@@ -407,7 +408,7 @@ fn draw_settings(ui: &mut Ui, painter: &Painter, card: Rect, setter: &ParamSette
     let avail = card.width() - 52.0;
     let gap = 6.0;
     let cw = (avail - gap * (n as f32 - 1.0)) / n as f32;
-    let cur = params.sound.value();
+    let cur = Sound::from_index(params.sound.value() as usize);
     for i in 0..n {
         let s = Sound::from_index(i);
         let r = Rect::from_min_size(
@@ -417,21 +418,21 @@ fn draw_settings(ui: &mut Ui, painter: &Painter, card: Rect, setter: &ParamSette
         let resp = ui.interact(r, ui.id().with(("snd", i)), Sense::click());
         let fill = if s == cur { BLUE } else { hover_fill(&resp, BTN, BTN_HOVER) };
         painter.rect_filled(r, 15.0, fill);
-        painter.text(r.center(), Align2::CENTER_CENTER, Sound::variants()[i], FontId::proportional(14.0), TEXT);
+        painter.text(r.center(), Align2::CENTER_CENTER, s.name(), FontId::proportional(14.0), TEXT);
         if resp.clicked() {
-            set(setter, &params.sound, s);
+            set(setter, &params.sound, i as i32);
         }
     }
 
     let y0 = card.min.y + 92.0;
     // Akcent: [wył.] [1] [2] ... [N]
     let accent = params.accent.value();
-    painter.text(Pos2::new(x_l, y0), Align2::LEFT_CENTER, "Akcent", FontId::proportional(15.0), TEXT);
+    painter.text(Pos2::new(x_l, y0), Align2::LEFT_CENTER, tr("Accent", "Akcent"), FontId::proportional(15.0), TEXT);
     let off_r = Rect::from_center_size(Pos2::new(x_l + 92.0, y0), Vec2::new(46.0, 24.0));
     let off = ui.interact(off_r, ui.id().with("acc_off"), Sense::click());
     let fill = if !accent { BLUE } else { hover_fill(&off, BTN, BTN_HOVER) };
     painter.rect_filled(off_r, 12.0, fill);
-    painter.text(off_r.center(), Align2::CENTER_CENTER, "wył.", FontId::proportional(13.0), TEXT);
+    painter.text(off_r.center(), Align2::CENTER_CENTER, tr("off", "wył."), FontId::proportional(13.0), TEXT);
     if off.clicked() && accent {
         set(setter, &params.accent, false);
     }
@@ -454,16 +455,16 @@ fn draw_settings(ui: &mut Ui, painter: &Painter, card: Rect, setter: &ParamSette
             }
         }
     }
-    if toggle(ui, painter, "sync", "Synchronizuj z transportem hosta", y0 + 34.0, card, params.sync.value()) {
+    if toggle(ui, painter, "sync", tr("Sync to host transport", "Synchronizuj z transportem hosta"), y0 + 34.0, card, params.sync.value()) {
         set(setter, &params.sync, !params.sync.value());
     }
-    if toggle(ui, painter, "thru", "Przepuszczaj sygnał wejściowy", y0 + 68.0, card, params.pass_input.value()) {
+    if toggle(ui, painter, "thru", tr("Mix with track audio", "Miksuj z dźwiękiem ścieżki"), y0 + 68.0, card, params.pass_input.value()) {
         set(setter, &params.pass_input, !params.pass_input.value());
     }
 
     // głośność
     let y = y0 + 108.0;
-    painter.text(Pos2::new(x_l, y), Align2::LEFT_CENTER, "Głośność", FontId::proportional(15.0), TEXT);
+    painter.text(Pos2::new(x_l, y), Align2::LEFT_CENTER, tr("Volume", "Głośność"), FontId::proportional(15.0), TEXT);
     let track = Rect::from_min_max(Pos2::new(x_l + 90.0, y - 2.0), Pos2::new(card.max.x - 90.0, y + 2.0));
     let norm = params.gain.unmodulated_normalized_value();
     if let Some(nv) = h_slider(ui, painter, "gain", track, norm, true, &params.gain, setter) {
