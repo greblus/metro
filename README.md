@@ -61,4 +61,7 @@ W obu przypadkach najwygodniej włączyć **Synchronizuj z transportem hosta**.
 
 - GUI działa przez X11 (na Waylandzie przez XWayland), bo tak osadzają okna wtyczek VST3/CLAP
   Ardour i Reaper.
-- `METRO_SHOW_MENU=1` otwiera panel opcji od razu po starcie (użyte do zrzutów ekranu).
+
+## Licencja
+
+[GPL-3.0-or-later](LICENSE). Wersja VST3 korzysta z bindingów VST3 objętych GPLv3.

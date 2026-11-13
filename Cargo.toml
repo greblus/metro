@@ -3,6 +3,7 @@ name = "metro"
 version = "0.1.0"
 edition = "2021"
 description = "Metronom jako wtyczka VST3/CLAP"
+license = "GPL-3.0-or-later"
 
 [workspace]
 members = ["xtask"]
