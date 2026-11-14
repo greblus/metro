@@ -70,3 +70,5 @@ jobs:
         with:
           files: dist/${{ steps.package.outputs.name }}.tar.gz
           generate_release_notes: true
+          # a re-pushed tag replaces the package in the existing release
+          overwrite_files: true
