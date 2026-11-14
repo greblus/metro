@@ -1,7 +1,7 @@
-use nih_plug::prelude::*;
-use nih_plug_egui::EguiState;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use nice_plug::prelude::*;
+use nice_plug_egui::{EguiEditor, EguiEditorState, RepaintNotifier};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 mod editor;
 mod i18n;
@@ -51,9 +51,6 @@ impl Meter {
 
 #[derive(Params)]
 pub struct MetroParams {
-    #[persist = "editor-state"]
-    pub editor_state: Arc<EguiState>,
-
     #[id = "bpm"]
     pub bpm: IntParam,
     #[id = "meter"]
@@ -87,7 +84,6 @@ impl MetroParams {
 impl Default for MetroParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(editor::WIDTH, editor::HEIGHT),
             bpm: IntParam::new("Tempo", 100, IntRange::Linear { min: BPM_MIN, max: BPM_MAX })
                 .with_unit(" BPM"),
             meter: EnumParam::new(tr("Meter", "Metrum"), Meter::M4_4),
@@ -143,6 +139,13 @@ pub struct Shared {
 pub struct Metro {
     params: Arc<MetroParams>,
     shared: Arc<Shared>,
+    editor_state: Arc<EguiEditorState>,
+    /// Pozwala wątkowi audio poprosić GUI o odświeżenie (np. przy zmianie miary).
+    repaint: RepaintNotifier,
+    /// Uruchomione jako samodzielny program (bez DAW): opcje zależne od hosta są wyłączone.
+    standalone: bool,
+    /// Ostatnio zgłoszony do GUI stan (miara, czy gra), żeby nie odświeżać bez potrzeby.
+    last_shown: (i32, bool),
     sr: f32,
     bank: sounds::SampleBank,
 
@@ -165,6 +168,10 @@ impl Default for Metro {
         Self {
             params: Arc::new(MetroParams::default()),
             shared,
+            editor_state: editor::initial_state(),
+            repaint: RepaintNotifier::new(),
+            standalone: false,
+            last_shown: (-1, false),
             sr: 48000.0,
             bank: Vec::new(),
             phase: 0.0,
@@ -219,6 +226,7 @@ impl Plugin for Metro {
         },
     ];
 
+    type Editor = EguiEditor<editor::MetroEditor>;
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -226,16 +234,22 @@ impl Plugin for Metro {
         self.params.clone()
     }
 
-    fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        editor::create(self.params.clone(), self.shared.clone())
+    fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Self::Editor> {
+        editor::create(
+            self.editor_state.clone(),
+            self.repaint.clone(),
+            self.params.clone(),
+            self.shared.clone(),
+        )
     }
 
-    fn initialize(
+    fn activate(
         &mut self,
         _layout: &AudioIOLayout,
         cfg: &BufferConfig,
-        _ctx: &mut impl InitContext<Self>,
+        ctx: &mut impl ActivateContext<Self>,
     ) -> bool {
+        self.standalone = ctx.plugin_api() == PluginApi::Standalone;
         self.sr = cfg.sample_rate;
         self.bank = sounds::build_bank(self.sr);
         true
@@ -256,8 +270,10 @@ impl Plugin for Metro {
         let meter = self.params.meter.value();
         let num = meter.num();
         let acc_idx = self.params.accent_index(num);
-        let pass = self.params.pass_input.value();
-        let sync = self.params.sync.value();
+        // W wersji samodzielnej nie ma hosta: brak transportu do synchronizacji, a wejście
+        // to zwykle mikrofon (sprzężenie), więc obie opcje są wymuszone na „wyłączone”.
+        let pass = !self.standalone && self.params.pass_input.value();
+        let sync = !self.standalone && self.params.sync.value();
         let sr = self.sr as f64;
 
         // Przygotowanie trybu
@@ -336,6 +352,12 @@ impl Plugin for Metro {
         }
         self.shared.beat.store(self.beat, Ordering::Relaxed);
         self.shared.running.store(running, Ordering::Relaxed);
+        if self.last_shown != (self.beat, running) {
+            self.last_shown = (self.beat, running);
+            if self.editor_state.is_open() {
+                self.repaint.request_repaint();
+            }
+        }
 
         ProcessStatus::KeepAlive
     }
@@ -356,5 +378,5 @@ impl Vst3Plugin for Metro {
         &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
 }
 
-nih_export_clap!(Metro);
-nih_export_vst3!(Metro);
+nice_export_clap!(Metro);
+nice_export_vst3!(Metro);

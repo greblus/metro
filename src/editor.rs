@@ -1,17 +1,22 @@
 use crate::i18n::tr;
-use crate::{Meter, MetroParams, Shared, Sound, BPM_MAX, BPM_MIN};
-use nih_plug::prelude::*;
-use nih_plug_egui::egui::{
-    self, Align2, CentralPanel, Color32, Context, CursorIcon, FontId, Frame, Painter, Pos2, Rect,
-    Response, Sense, Stroke, Ui, Vec2,
+use crate::{BPM_MAX, BPM_MIN, Meter, MetroParams, Shared, Sound};
+use nice_plug::context::gui::GuiContext;
+use nice_plug::editor::dpi::LogicalSize;
+use nice_plug::prelude::*;
+use egui::{
+    self, Align2, Color32, CursorIcon, FontId, Painter, Pos2, Rect, Response, Sense, Stroke, Ui,
+    Vec2,
 };
-use nih_plug_egui::create_egui_editor;
-use std::sync::atomic::Ordering;
+use nice_plug_egui::{
+    EguiEditor, EguiEditorState, EguiNiceSettings, NiceEguiApp, RepaintNotifier,
+    create_egui_editor,
+};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-pub const WIDTH: u32 = 560;
-pub const HEIGHT: u32 = 520;
+pub const WIDTH: f32 = 560.0;
+pub const HEIGHT: f32 = 520.0;
 
 const BG: Color32 = Color32::from_rgb(0x24, 0x23, 0x28);
 const CARD: Color32 = Color32::from_rgb(0x35, 0x34, 0x39);
@@ -29,29 +34,74 @@ const DIM: Color32 = Color32::from_rgb(0xa0, 0xa0, 0xa8);
 struct UiState {
     taps: Vec<Instant>,
     menu_open: bool,
+    /// Wersja samodzielna: ukrywa opcje, które mają sens tylko w DAW.
+    standalone: bool,
 }
 
-pub fn create(params: Arc<MetroParams>, shared: Arc<Shared>) -> Option<Box<dyn Editor>> {
-    create_egui_editor(
-        params.editor_state.clone(),
+/// Stan okna (stały rozmiar, bez skalowania przez użytkownika).
+pub fn initial_state() -> Arc<EguiEditorState> {
+    EguiEditorState::from_size(LogicalSize::new(WIDTH, HEIGHT), 1.0)
+}
+
+pub struct MetroEditor {
+    params: Arc<MetroParams>,
+    shared: Arc<Shared>,
+    st: UiState,
+    /// Kontekst GUI wtyczki; istnieje tylko, gdy okno jest otwarte.
+    gui: Option<GuiContext>,
+}
+
+pub fn create(
+    state: Arc<EguiEditorState>,
+    repaint: RepaintNotifier,
+    params: Arc<MetroParams>,
+    shared: Arc<Shared>,
+) -> Option<EguiEditor<MetroEditor>> {
+    let app = MetroEditor {
+        params,
+        shared,
         // METRO_SHOW_MENU=1 otwiera panel opcji od razu (np. do zrzutów ekranu)
-        UiState {
+        st: UiState {
             menu_open: std::env::var_os("METRO_SHOW_MENU").is_some(),
             ..Default::default()
         },
-        |ctx, _| {
-            let mut style = (*ctx.style()).clone();
-            style.visuals = egui::Visuals::dark();
-            ctx.set_style(style);
-        },
-        move |ctx, setter, st| {
-            CentralPanel::default()
-                .frame(Frame::NONE.fill(BG))
-                .show(ctx, |ui| draw(ui, ctx, setter, st, &params, &shared));
-            // wskaźnik uderzeń musi się odświeżać
-            ctx.request_repaint_after(Duration::from_millis(16));
-        },
-    )
+        gui: None,
+    };
+    create_egui_editor(state, repaint, EguiNiceSettings::new().with_tile("Metro"), app)
+}
+
+impl NiceEguiApp for MetroEditor {
+    fn build(
+        &mut self,
+        egui_ctx: egui::Context,
+        gui: GuiContext,
+        _frame: &mut nice_plug_egui::Frame,
+    ) -> Result<(), nice_plug_egui::baseview::HandlerError> {
+        egui_ctx.set_visuals(egui::Visuals::dark());
+        self.st.standalone = gui.plugin_api() == PluginApi::Standalone;
+        self.gui = Some(gui);
+        Ok(())
+    }
+
+    fn editor_closed(&mut self) {
+        self.gui = None;
+    }
+
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut nice_plug_egui::Frame) {
+        let Some(gui) = self.gui.as_ref() else {
+            return;
+        };
+        let setter = gui.param_setter();
+        ui.painter().rect_filled(ui.max_rect(), 0.0, BG);
+        draw(ui, &setter, &mut self.st, &self.params, &self.shared);
+        // Wątek audio zgłasza zmiany przez RepaintNotifier, ale nie na każdej platformie timer
+        // baseview go niezawodnie odpytuje. Dlatego okno samo prosi o kolejne klatki: często,
+        // gdy metronom gra (wskaźnik miary) lub trzymany jest przycisk „+/−”, rzadko w spoczynku
+        // (np. żeby zauważyć start transportu w DAW).
+        let busy = self.shared.running.load(Ordering::Relaxed) || ui.input(|i| i.pointer.any_down());
+        ui.ctx()
+            .request_repaint_after(Duration::from_millis(if busy { 30 } else { 100 }));
+    }
 }
 
 fn set<P: Param>(setter: &ParamSetter, p: &P, v: P::Plain) {
@@ -71,12 +121,11 @@ fn hover_fill(r: &Response, normal: Color32, hover: Color32) -> Color32 {
 
 fn circle_button(ui: &mut Ui, id: &str, c: Pos2, r: f32) -> Response {
     let rect = Rect::from_center_size(c, Vec2::splat(r * 2.0));
-    ui.interact(rect, ui.id().with(id), Sense::click())
+    ui.interact(rect, ui.scope_id().with(id), Sense::click())
 }
 
 fn draw(
     ui: &mut Ui,
-    ctx: &Context,
     setter: &ParamSetter,
     st: &mut UiState,
     params: &MetroParams,
@@ -112,15 +161,16 @@ fn draw(
     let card = Rect::from_min_size(p(60.0, 98.0), Vec2::new(w - 120.0, 230.0));
     painter.rect_filled(card, 12.0, CARD);
 
+    // synchronizacja z hostem ma sens tylko w DAW
+    let sync = !st.standalone && params.sync.value();
     if st.menu_open {
-        draw_settings(ui, &painter, card, setter, params);
+        draw_settings(ui, &painter, card, setter, params, st.standalone);
     } else {
-        draw_tempo_card(ui, &painter, card, setter, params, shared);
+        draw_tempo_card(ui, &painter, card, setter, params, shared, sync);
     }
 
     // ---------- Dolny rząd ----------
     let row_y = o.y + 420.0;
-    let sync = params.sync.value();
 
     // Stuknij (tap tempo)
     let tap_c = Pos2::new(cx - 112.0, row_y);
@@ -195,8 +245,6 @@ fn draw(
     if menu.clicked() {
         st.menu_open = !st.menu_open;
     }
-
-    let _ = ctx;
 }
 
 fn draw_tempo_card(
@@ -206,8 +254,8 @@ fn draw_tempo_card(
     setter: &ParamSetter,
     params: &MetroParams,
     shared: &Shared,
+    sync: bool,
 ) {
-    let sync = params.sync.value();
     let bpm = params.bpm.value();
     let num_c = Pos2::new(card.center().x - 20.0, card.min.y + 82.0);
 
@@ -229,9 +277,18 @@ fn draw_tempo_card(
     }
 
     // kółko myszy nad kartą zmienia tempo
-    let card_resp = ui.interact(card, ui.id().with("card"), Sense::hover());
+    let card_resp = ui.interact(card, ui.scope_id().with("card"), Sense::hover());
     if card_resp.hovered() && !sync {
-        let dy = ui.input(|i| i.raw_scroll_delta.y);
+        let dy: f32 = ui.input(|i| {
+            i.raw
+                .events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::MouseWheel { delta, .. } => Some(delta.y),
+                    _ => None,
+                })
+                .sum()
+        });
         if dy != 0.0 {
             set(setter, &params.bpm, (bpm + dy.signum() as i32).clamp(BPM_MIN, BPM_MAX));
         }
@@ -265,7 +322,7 @@ fn draw_tempo_card(
         // klik w kropkę ustawia na niej akcent (drugi klik w akcentowaną wyłącza akcent)
         let hit = ui.interact(
             Rect::from_center_size(c, Vec2::splat(gap)),
-            ui.id().with(("dot", i)),
+            ui.scope_id().with(("dot", i)),
             Sense::click(),
         );
         if hit.clicked() {
@@ -338,7 +395,7 @@ fn h_slider<P: Param>(
 ) -> Option<f32> {
     let hit = track.expand2(Vec2::new(10.0, 12.0));
     let sense = if enabled { Sense::click_and_drag() } else { Sense::hover() };
-    let r = ui.interact(hit, ui.id().with(id), sense);
+    let r = ui.interact(hit, ui.scope_id().with(id), sense);
 
     let knob_x = egui::lerp(track.x_range(), norm.clamp(0.0, 1.0));
     painter.rect_filled(track, 2.0, TRACK);
@@ -385,7 +442,7 @@ fn toggle(ui: &mut Ui, painter: &Painter, id: &str, label: &str, y: f32, card: R
     painter.text(Pos2::new(x_l, y), Align2::LEFT_CENTER, label, FontId::proportional(15.0), TEXT);
     let sw = Rect::from_center_size(Pos2::new(card.max.x - 50.0, y), Vec2::new(44.0, 24.0));
     // klikalny tylko przełącznik (w wierszu akcentu są jeszcze inne przyciski)
-    let r = ui.interact(sw.expand(6.0), ui.id().with(id), Sense::click());
+    let r = ui.interact(sw.expand(6.0), ui.scope_id().with(id), Sense::click());
     let bg = if on { BLUE } else { hover_fill(&r, TRACK, BTN_SEL) };
     painter.rect_filled(sw, 12.0, bg);
     let kx = if on { sw.max.x - 12.0 } else { sw.min.x + 12.0 };
@@ -393,7 +450,14 @@ fn toggle(ui: &mut Ui, painter: &Painter, id: &str, label: &str, y: f32, card: R
     r.clicked()
 }
 
-fn draw_settings(ui: &mut Ui, painter: &Painter, card: Rect, setter: &ParamSetter, params: &MetroParams) {
+fn draw_settings(
+    ui: &mut Ui,
+    painter: &Painter,
+    card: Rect,
+    setter: &ParamSetter,
+    params: &MetroParams,
+    standalone: bool,
+) {
     let x_l = card.min.x + 26.0;
     painter.text(
         Pos2::new(x_l, card.min.y + 22.0),
@@ -415,7 +479,7 @@ fn draw_settings(ui: &mut Ui, painter: &Painter, card: Rect, setter: &ParamSette
             Pos2::new(x_l + i as f32 * (cw + gap), card.min.y + 36.0),
             Vec2::new(cw, 30.0),
         );
-        let resp = ui.interact(r, ui.id().with(("snd", i)), Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("snd", i)), Sense::click());
         let fill = if s == cur { BLUE } else { hover_fill(&resp, BTN, BTN_HOVER) };
         painter.rect_filled(r, 15.0, fill);
         painter.text(r.center(), Align2::CENTER_CENTER, s.name(), FontId::proportional(14.0), TEXT);
@@ -429,7 +493,7 @@ fn draw_settings(ui: &mut Ui, painter: &Painter, card: Rect, setter: &ParamSette
     let accent = params.accent.value();
     painter.text(Pos2::new(x_l, y0), Align2::LEFT_CENTER, tr("Accent", "Akcent"), FontId::proportional(15.0), TEXT);
     let off_r = Rect::from_center_size(Pos2::new(x_l + 92.0, y0), Vec2::new(46.0, 24.0));
-    let off = ui.interact(off_r, ui.id().with("acc_off"), Sense::click());
+    let off = ui.interact(off_r, ui.scope_id().with("acc_off"), Sense::click());
     let fill = if !accent { BLUE } else { hover_fill(&off, BTN, BTN_HOVER) };
     painter.rect_filled(off_r, 12.0, fill);
     painter.text(off_r.center(), Align2::CENTER_CENTER, tr("off", "wył."), FontId::proportional(13.0), TEXT);
@@ -455,11 +519,25 @@ fn draw_settings(ui: &mut Ui, painter: &Painter, card: Rect, setter: &ParamSette
             }
         }
     }
-    if toggle(ui, painter, "sync", tr("Sync to host transport", "Synchronizuj z transportem hosta"), y0 + 34.0, card, params.sync.value()) {
-        set(setter, &params.sync, !params.sync.value());
-    }
-    if toggle(ui, painter, "thru", tr("Mix with track audio", "Miksuj z dźwiękiem ścieżki"), y0 + 68.0, card, params.pass_input.value()) {
-        set(setter, &params.pass_input, !params.pass_input.value());
+    if standalone {
+        // opcje zależne od DAW nie mają tu zastosowania
+        painter.text(
+            Pos2::new(x_l, y0 + 51.0),
+            Align2::LEFT_CENTER,
+            tr(
+                "Host sync and track mixing are available in the plugin version.",
+                "Synchronizacja i miksowanie ze ścieżką są dostępne w wersji wtyczki.",
+            ),
+            FontId::proportional(13.0),
+            DIM,
+        );
+    } else {
+        if toggle(ui, painter, "sync", tr("Sync to host transport", "Synchronizuj z transportem hosta"), y0 + 34.0, card, params.sync.value()) {
+            set(setter, &params.sync, !params.sync.value());
+        }
+        if toggle(ui, painter, "thru", tr("Mix with track audio", "Miksuj z dźwiękiem ścieżki"), y0 + 68.0, card, params.pass_input.value()) {
+            set(setter, &params.pass_input, !params.pass_input.value());
+        }
     }
 
     // głośność

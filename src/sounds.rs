@@ -1,7 +1,7 @@
 //! Syntezowane próbki kliknięć. Generowane raz w `initialize()` dla danej częstotliwości próbkowania.
 
 use crate::i18n::tr;
-use nih_plug::prelude::Enum;
+use nice_plug::prelude::Enum;
 use std::f32::consts::TAU;
 
 #[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]

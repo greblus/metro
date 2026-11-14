@@ -18,9 +18,9 @@ fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn install() -> nih_plug_xtask::Result<()> {
+fn install() -> nice_plug_xtask::Result<()> {
     let args = ["bundle", "metro", "--release"].map(String::from);
-    nih_plug_xtask::main_with_args("cargo xtask", args)?;
+    nice_plug_xtask::main_with_args("cargo xtask", args)?;
 
     let bundled = Path::new("target/bundled");
     let home = PathBuf::from(std::env::var("HOME")?);
@@ -42,10 +42,10 @@ fn install() -> nih_plug_xtask::Result<()> {
     Ok(())
 }
 
-fn main() -> nih_plug_xtask::Result<()> {
+fn main() -> nice_plug_xtask::Result<()> {
     if std::env::args().nth(1).as_deref() == Some("install") {
         install()
     } else {
-        nih_plug_xtask::main()
+        nice_plug_xtask::main()
     }
 }
