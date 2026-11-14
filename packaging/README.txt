@@ -9,7 +9,7 @@ Contents of this package
   Metro.vst3/   VST3 plugin (Ardour, Reaper, Bitwig, ...)
   Metro.clap    CLAP plugin (Reaper, Bitwig, ...)
   metro         standalone application (no DAW needed)
-  LICENSE       GPL-3.0-or-later
+  LICENSE       ISC license
 
 Requirements: Linux x86_64 (built on Ubuntu 24.04, needs glibc 2.39 or newer),
 OpenGL, X11 or XWayland. The standalone app needs JACK/PipeWire or ALSA.

@@ -78,4 +78,4 @@ W obu przypadkach najwygodniej włączyć **Synchronizuj z transportem hosta**.
 
 ## Licencja
 
-[GPL-3.0-or-later](LICENSE). Wersja VST3 korzysta z bindingów VST3 objętych GPLv3.
+[ISC](LICENSE), tak samo jak [nice-plug](https://codeberg.org/RustAudio/nice-plug).

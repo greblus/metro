@@ -78,4 +78,4 @@ In both cases **Sync to host transport** is the most convenient mode.
 
 ## License
 
-[GPL-3.0-or-later](LICENSE). The VST3 version uses VST3 bindings licensed under GPLv3.
+[ISC](LICENSE), the same license as [nice-plug](https://codeberg.org/RustAudio/nice-plug).

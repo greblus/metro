@@ -3,7 +3,7 @@ name = "metro"
 version = "0.1.0"
 edition = "2024"
 description = "Metronome VST3/CLAP plugin"
-license = "GPL-3.0-or-later"
+license = "ISC"
 
 [workspace]
 members = ["xtask"]
