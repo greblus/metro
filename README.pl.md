@@ -3,7 +3,7 @@
 [English version](README.md)
 
 Prosty metronom jako wtyczka **VST3 / CLAP** dla Linuksa (Ardour, Reaper i inne), napisany w Rust
-z użyciem [nih-plug](https://github.com/robbert-vdh/nih-plug) i egui. Działa też jako samodzielny program.
+z użyciem [nice-plug](https://codeberg.org/RustAudio/nice-plug) i egui. Działa też jako samodzielny program.
 
 <p>
   <img src="docs/metro-pl.png" width="49%" alt="Metro – widok główny">
@@ -24,6 +24,12 @@ z użyciem [nih-plug](https://github.com/robbert-vdh/nih-plug) i egui. Działa t
 - interfejs po polsku i po angielsku, wybierany z locale systemu (`LC_ALL` → `LC_MESSAGES` →
   `LANG`); można wymusić przez `METRO_LANG=pl` albo `METRO_LANG=en`
 
+## Pobieranie
+
+Gotowe paczki (wtyczki + samodzielny program + `README.txt` z instrukcją instalacji) są na stronie
+[Releases](https://github.com/greblus/metro/releases), budowane przez GitHub Actions. Wersje z każdego
+commita są dostępne jako artefakty workflow [Build](https://github.com/greblus/metro/actions).
+
 ## Budowanie i instalacja
 
 Wymagany Rust (stable).
@@ -41,11 +47,14 @@ Same paczki (bez instalacji) trafiają do `target/bundled/`:
 cargo xtask bundle metro --release
 ```
 
-Samodzielna aplikacja (JACK/ALSA):
+Samodzielna aplikacja (JACK/ALSA; `--help` pokazuje opcje audio, np. `-b jack` / `-b alsa`):
 
 ```sh
 cargo run --release --features standalone
 ```
+
+W wersji samodzielnej opcje działające tylko w DAW (synchronizacja z hostem, miksowanie ze ścieżką)
+są ukryte.
 
 ## Nagrywanie kliku
 

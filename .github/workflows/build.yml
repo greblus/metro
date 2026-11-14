@@ -1,0 +1,72 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to publish releases for v* tags
+
+jobs:
+  linux:
+    name: Linux x86_64
+    # The runner's glibc (2.39 on 24.04) is the minimum the binaries need.
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libasound2-dev libgl-dev libjack-jackd2-dev \
+            libx11-xcb-dev libxcb1-dev libxcb-dri2-0-dev libxcb-icccm4-dev \
+            libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --release --lib
+
+      # The standalone app needs the `standalone` feature (audio backends). The plugins are
+      # built afterwards without it, so they don't link the standalone-only dependencies.
+      - name: Build standalone app
+        run: cargo build --release --features standalone --bin metro
+
+      - name: Build plugin bundles
+        run: cargo xtask bundle metro --release
+
+      - name: Package
+        id: package
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)-${GITHUB_SHA::7}"
+          fi
+          NAME="metro-${VERSION}-linux-x86_64"
+          mkdir -p "dist/$NAME"
+          cp -r target/bundled/Metro.vst3 target/bundled/Metro.clap "dist/$NAME/"
+          cp target/release/metro "dist/$NAME/metro"
+          cp packaging/README.txt LICENSE "dist/$NAME/"
+          tar -C dist -czf "dist/$NAME.tar.gz" "$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          ls -lR dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: dist/${{ steps.package.outputs.name }}.tar.gz
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ steps.package.outputs.name }}.tar.gz
+          generate_release_notes: true

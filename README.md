@@ -3,7 +3,7 @@
 [Wersja polska](README.pl.md)
 
 A simple metronome **VST3 / CLAP** plugin for Linux (Ardour, Reaper and others), written in Rust
-with [nih-plug](https://github.com/robbert-vdh/nih-plug) and egui. It also runs as a standalone app.
+with [nice-plug](https://codeberg.org/RustAudio/nice-plug) and egui. It also runs as a standalone app.
 
 <p>
   <img src="docs/metro-en.png" width="49%" alt="Metro – main view">
@@ -24,6 +24,13 @@ with [nih-plug](https://github.com/robbert-vdh/nih-plug) and egui. It also runs 
 - English and Polish UI, picked from the system locale (`LC_ALL` → `LC_MESSAGES` → `LANG`);
   override with `METRO_LANG=en` or `METRO_LANG=pl`
 
+## Download
+
+Ready-made packages (plugins + standalone app + `README.txt` with install notes) are on the
+[Releases](https://github.com/greblus/metro/releases) page, built by GitHub Actions. Builds of
+every commit are available as artifacts of the [Build](https://github.com/greblus/metro/actions)
+workflow.
+
 ## Building and installing
 
 Requires Rust (stable).
@@ -41,11 +48,13 @@ To only build the bundles (into `target/bundled/`):
 cargo xtask bundle metro --release
 ```
 
-Standalone app (JACK/ALSA):
+Standalone app (JACK/ALSA; `--help` lists audio options such as `-b jack` / `-b alsa`):
 
 ```sh
 cargo run --release --features standalone
 ```
+
+In the standalone app the DAW-only options (host sync, mixing with track audio) are hidden.
 
 ## Recording the click
 
