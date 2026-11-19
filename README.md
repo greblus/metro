@@ -54,7 +54,9 @@ Standalone app (JACK/ALSA; `--help` lists audio options such as `-b jack` / `-b 
 cargo run --release --features standalone
 ```
 
-In the standalone app the DAW-only options (host sync, mixing with track audio) are hidden.
+In the standalone app the DAW-only options (host sync, mixing with track audio) are hidden. Under
+PipeWire it plays through the system default output; another output (USB interface, HDMI, ...) can be
+picked in the menu under **Output** and is remembered. `-b jack` uses JACK instead.
 
 ## Recording the click
 

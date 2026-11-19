@@ -31,14 +31,18 @@ Then restart your DAW and rescan plugins if it asks.
 Running the standalone app
 --------------------------
 
-  ./metro                 picks an audio backend automatically
-  ./metro -b jack         JACK (also works with PipeWire's JACK support)
-  ./metro -b alsa         ALSA (under PipeWire this goes through pipewire-alsa)
+  ./metro                 plays through the system default output
+  ./metro -b jack         JACK instead (connects to system:playback_1/2)
   ./metro --help          all options (sample rate, period size, devices, ...)
 
-With PipeWire the outputs are usually connected to your sound card
-automatically. If you hear nothing, check the connections in qpwgraph or
-Helvum (or try "-b alsa"). Inputs are never connected automatically.
+With PipeWire, Metro plays through the system default output, like other
+apps, and follows it when you change it. To use a different output (USB
+interface, HDMI/TV, ...) open the menu (the button with three lines) and pick
+one under "Output"; the choice is remembered in ~/.config/metro/standalone.conf.
+
+With "-b jack" the outputs go to system:playback_1/2, which under PipeWire is
+the first sound card, not necessarily the one you listen on. Inputs are never
+connected automatically.
 
 In the standalone app "Sync to host transport" and "Mix with track audio"
 are not available - they only make sense inside a DAW.
@@ -74,10 +78,12 @@ Po polsku (skrót)
 Wtyczki: skopiuj Metro.vst3 do ~/.vst3, a Metro.clap do ~/.clap, uruchom
 ponownie DAW (w razie potrzeby przeskanuj wtyczki).
 
-Samodzielny program: ./metro (albo ./metro -b jack / -b alsa, ./metro --help).
-Pod PipeWire wyjścia zwykle podłączają się same; jeśli nic nie słychać,
-sprawdź połączenia w qpwgraph albo spróbuj -b alsa. Synchronizacja z hostem
-i miksowanie ze ścieżką działają tylko we wtyczce.
+Samodzielny program: ./metro gra na domyślne wyjście systemu (pod PipeWire)
+i podąża za jego zmianą. Inne wyjście (interfejs USB, HDMI/TV...) wybierzesz
+w menu (przycisk z trzema kreskami) w wierszu "Wyjście"; wybór jest
+zapamiętywany. ./metro -b jack używa JACK-a (system:playback_1/2 = pierwsza
+karta). Synchronizacja z hostem i miksowanie ze ścieżką działają tylko we
+wtyczce.
 
 Nagrywanie kliku: DAW nagrywa WEJŚCIE ścieżki. Reaper: "Record: output
 (stereo)" + "Monitor input". Ardour: Metro na szynie, wyjście szyny na wejście

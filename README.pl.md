@@ -54,7 +54,8 @@ cargo run --release --features standalone
 ```
 
 W wersji samodzielnej opcje działające tylko w DAW (synchronizacja z hostem, miksowanie ze ścieżką)
-są ukryte.
+są ukryte. Pod PipeWire program gra na domyślne wyjście systemu; inne wyjście (interfejs USB, HDMI…)
+wybierzesz w menu w wierszu **Wyjście** i zostanie zapamiętane. `-b jack` przełącza na JACK.
 
 ## Nagrywanie kliku
 

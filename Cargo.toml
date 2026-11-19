@@ -1,6 +1,6 @@
 [package]
 name = "metro"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2024"
 description = "Metronome VST3/CLAP plugin"
 license = "ISC"
@@ -17,12 +17,14 @@ required-features = ["standalone"]
 
 [features]
 # Samodzielna aplikacja (bez DAW): cargo run --release --features standalone
-standalone = ["nice-plug/standalone"]
+standalone = ["nice-plug/standalone", "dep:serde_json"]
 
 [dependencies]
 nice-plug = { version = "0.4.2", features = ["assert_process_allocs"] }
 nice-plug-egui = "0.6.0"
 egui = { version = "0.37.0", features = ["default_fonts"] }
+# tylko standalone: odczyt `pw-dump` przy wyborze wyjścia audio
+serde_json = { version = "1", optional = true }
 
 [profile.release]
 lto = "thin"

@@ -12,7 +12,7 @@ use nice_plug_egui::{
     create_egui_editor,
 };
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 
 pub const WIDTH: f32 = 560.0;
@@ -36,7 +36,57 @@ struct UiState {
     menu_open: bool,
     /// Wersja samodzielna: ukrywa opcje, które mają sens tylko w DAW.
     standalone: bool,
+    out: OutputUi,
 }
+
+/// Wybór wyjścia audio w wersji samodzielnej (pod PipeWire, patrz `audio_out`).
+#[derive(Default)]
+struct OutputUi {
+    /// 0 = jeszcze nie wiadomo, 1 = można wybierać, 2 = niedostępne (np. backend JACK).
+    available: Arc<AtomicU8>,
+    /// `node.name` wybranego wyjścia; `None` = domyślne systemowe.
+    choice: Option<String>,
+    /// (`node.name`, czytelna nazwa)
+    sinks: Vec<(String, String)>,
+}
+
+/// Po starcie: przywraca zapisane wyjście i sprawdza, czy wybór jest w ogóle możliwy.
+#[cfg(feature = "standalone")]
+fn out_start(out: &mut OutputUi) {
+    out.choice = crate::audio_out::load_choice();
+    out_refresh(out);
+    let choice = out.choice.clone();
+    let available = out.available.clone();
+    std::thread::spawn(move || {
+        let ok = crate::audio_out::apply(choice.as_deref());
+        available.store(if ok { 1 } else { 2 }, Ordering::Relaxed);
+    });
+}
+#[cfg(not(feature = "standalone"))]
+fn out_start(_: &mut OutputUi) {}
+
+/// Odświeża listę wyjść (przy otwarciu panelu opcji).
+#[cfg(feature = "standalone")]
+fn out_refresh(out: &mut OutputUi) {
+    out.sinks = crate::audio_out::list_sinks()
+        .into_iter()
+        .map(|s| (s.name, s.description))
+        .collect();
+}
+#[cfg(not(feature = "standalone"))]
+fn out_refresh(_: &mut OutputUi) {}
+
+/// Zapisuje wybór i przełącza strumień (w tle, żeby nie blokować okna).
+#[cfg(feature = "standalone")]
+fn out_select(out: &mut OutputUi, choice: Option<String>) {
+    crate::audio_out::save_choice(choice.as_deref());
+    out.choice = choice.clone();
+    std::thread::spawn(move || {
+        crate::audio_out::apply(choice.as_deref());
+    });
+}
+#[cfg(not(feature = "standalone"))]
+fn out_select(_: &mut OutputUi, _: Option<String>) {}
 
 /// Stan okna (stały rozmiar, bez skalowania przez użytkownika).
 pub fn initial_state() -> Arc<EguiEditorState> {
@@ -79,6 +129,9 @@ impl NiceEguiApp for MetroEditor {
     ) -> Result<(), nice_plug_egui::baseview::HandlerError> {
         egui_ctx.set_visuals(egui::Visuals::dark());
         self.st.standalone = gui.plugin_api() == PluginApi::Standalone;
+        if self.st.standalone {
+            out_start(&mut self.st.out);
+        }
         self.gui = Some(gui);
         Ok(())
     }
@@ -164,7 +217,7 @@ fn draw(
     // synchronizacja z hostem ma sens tylko w DAW
     let sync = !st.standalone && params.sync.value();
     if st.menu_open {
-        draw_settings(ui, &painter, card, setter, params, st.standalone);
+        draw_settings(ui, &painter, card, setter, params, st.standalone, &mut st.out);
     } else {
         draw_tempo_card(ui, &painter, card, setter, params, shared, sync);
     }
@@ -244,6 +297,9 @@ fn draw(
     }
     if menu.clicked() {
         st.menu_open = !st.menu_open;
+        if st.menu_open && st.standalone {
+            out_refresh(&mut st.out);
+        }
     }
 }
 
@@ -457,6 +513,7 @@ fn draw_settings(
     setter: &ParamSetter,
     params: &MetroParams,
     standalone: bool,
+    out: &mut OutputUi,
 ) {
     let x_l = card.min.x + 26.0;
     painter.text(
@@ -520,9 +577,12 @@ fn draw_settings(
         }
     }
     if standalone {
+        if out.available.load(Ordering::Relaxed) == 1 {
+            output_row(ui, painter, card, y0 + 34.0, out);
+        }
         // opcje zależne od DAW nie mają tu zastosowania
         painter.text(
-            Pos2::new(x_l, y0 + 51.0),
+            Pos2::new(x_l, y0 + 70.0),
             Align2::LEFT_CENTER,
             tr(
                 "Host sync and track mixing are available in the plugin version.",
@@ -555,4 +615,42 @@ fn draw_settings(
         FontId::proportional(13.0),
         DIM,
     );
+}
+
+/// Wiersz „Wyjście” z listą wyjść PipeWire (tylko w wersji samodzielnej).
+fn output_row(ui: &mut Ui, painter: &Painter, card: Rect, y: f32, out: &mut OutputUi) {
+    let x_l = card.min.x + 26.0;
+    painter.text(Pos2::new(x_l, y), Align2::LEFT_CENTER, tr("Output", "Wyjście"), FontId::proportional(15.0), TEXT);
+    let default_label = tr("System default", "Domyślne systemowe");
+    let current = match &out.choice {
+        None => default_label.to_string(),
+        Some(name) => out
+            .sinks
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, d)| d.clone())
+            .unwrap_or_else(|| name.clone()),
+    };
+    let rect = Rect::from_min_max(Pos2::new(x_l + 90.0, y - 12.0), Pos2::new(card.max.x - 26.0, y + 12.0));
+    let mut picked: Option<Option<String>> = None;
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        egui::ComboBox::from_id_salt("metro_output")
+            .width(rect.width())
+            .selected_text(current)
+            .show_ui(ui, |ui| {
+                if ui.selectable_label(out.choice.is_none(), default_label).clicked() {
+                    picked = Some(None);
+                }
+                for (name, desc) in &out.sinks {
+                    if ui.selectable_label(out.choice.as_deref() == Some(name), desc).clicked() {
+                        picked = Some(Some(name.clone()));
+                    }
+                }
+            });
+    });
+    if let Some(choice) = picked {
+        if choice != out.choice {
+            out_select(out, choice);
+        }
+    }
 }

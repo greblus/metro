@@ -3,6 +3,8 @@ use nice_plug_egui::{EguiEditor, EguiEditorState, RepaintNotifier};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
+#[cfg(feature = "standalone")]
+mod audio_out;
 mod editor;
 mod i18n;
 mod sounds;
